@@ -1,0 +1,73 @@
+---
+version: '2'
+services:
+  #Creation of the zookeeper container
+  #Zookeeper keeps track of status of the Kafka cluster nodes and it also keeps track of
+  #Kafka topics, partitions etc.
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 32181
+      ZOOKEEPER_TICK_TIME: 2000
+    expose:
+      - "2181"
+      - "2888"
+      - "32181"
+      - "3888"
+      
+  #Creation of the Kafka container that is connected to the zoo keeper container
+  #Kafka is used as the message queue for publishing and consuming each of the assessment
+  #attempts in the JSON file
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:32181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    expose:
+      - "9092"
+      - "29092"
+      
+  #Here we're establishing our cloudera container, which is an environment that allows us to run
+  #Hadoop. The environment has an HDFS, which is where we will be landing our transformed data 
+  cloudera:
+    image: midsw205/cdh-minimal:latest
+    expose:
+      - "8020" # nn
+      - "50070" # nn http
+      - "8888" # hue
+    #ports:
+    #- "8888:8888"
+    
+  #Spark is the engine by which we will conduct the batch data processing from the messages
+  #coming out of the Kafka topic. It's connected to cloudera for ___. You can see that 
+  #connected on the depends_on and environment declarations
+  #We're exposing port 8889 here so that we can luanch a jupyter notebook to run pyspark through
+  #rather than our command line.
+  spark:
+    image: midsw205/spark-python:0.0.5
+    stdin_open: true
+    tty: true
+    volumes:
+      - ~/w205:/w205
+    command: bash
+    depends_on:
+      - cloudera
+    environment:
+      HADOOP_NAMENODE: cloudera
+    expose:
+      - "8889"
+    ports:
+      - "8889:8889"
+      
+  #This is the container representing a mirror of our virtual machine. You can see from the 
+  #volumes declaration that's where our PWD will be. 
+  mids:
+    image: midsw205/base:latest
+    stdin_open: true
+    tty: true
+    volumes:
+      - ~/w205:/w205
